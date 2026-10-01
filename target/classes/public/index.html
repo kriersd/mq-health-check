@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<!--
+    Filename: src/main/resources/public/index.html
+    Purpose: Single-page HTML dashboard for rendering MQ Health Check status.
+    Sensitive-Data Handling: None. Employs client-side fetching from the local /health/mq API endpoint.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IBM MQ Health Check Dashboard</title>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --surface-color: #f7f8fa;
+            --border-color: #e5e7eb;
+            --text-color: #1f2328;
+            --text-muted: #57606a;
+            --accent-color: #0f62fe; /* IBM Blue */
+            --accent-hover: #0353e9;
+            --status-up: #198754;
+            --status-degraded: #ffc107;
+            --status-down: #dc3545;
+            --font-stack: -apple-system, "Segoe UI", system-ui, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-stack);
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 760px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 30px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .brand h1 {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        .env-badge {
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .card {
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 25px;
+        }
+
+        .status-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 25px;
+        }
+
+        .status-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .badge {
+            font-size: 14px;
+            font-weight: 700;
+            padding: 6px 16px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            display: inline-block;
+        }
+
+        .badge-unknown {
+            background-color: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .badge-up {
+            background-color: #d1e7dd;
+            color: var(--status-up);
+            border: 1px solid #badbcc;
+        }
+
+        .badge-degraded {
+            background-color: #fff3cd;
+            color: #664d03;
+            border: 1px solid #ffecb5;
+        }
+
+        .badge-down {
+            background-color: #f8d7da;
+            color: var(--status-down);
+            border: 1px solid #f5c2c7;
+        }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        @media (min-width: 576px) {
+            .data-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .data-item {
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            padding-bottom: 10px;
+        }
+
+        .data-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .data-value {
+            font-size: 15px;
+            font-weight: 500;
+            word-break: break-all;
+        }
+
+        .details-box {
+            grid-column: 1 / -1;
+            background-color: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 15px;
+        }
+
+        .details-box .data-value {
+            font-family: monospace;
+            font-size: 13px;
+            color: #24292f;
+            white-space: pre-wrap;
+        }
+
+        .actions {
+            text-align: right;
+        }
+
+        button {
+            background-color: var(--accent-color);
+            color: #ffffff;
+            border: none;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+        }
+
+        button:hover {
+            background-color: var(--accent-hover);
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button:disabled {
+            background-color: #8a8a8a;
+            cursor: not-allowed;
+        }
+
+        .error-message {
+            display: none;
+            background-color: #fdf2f2;
+            border: 1px solid #f5baba;
+            color: #9b1c1c;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-top: 15px;
+        }
+
+        footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div class="brand">
+            <h1 id="app-name">IBM MQ Monitor</h1>
+        </div>
+        <div class="env-badge" id="app-env">Loading...</div>
+    </header>
+
+    <main>
+        <div class="card">
+            <div class="status-header">
+                <span class="status-title">Queue Manager Health</span>
+                <span id="status-badge" class="badge badge-unknown">UNKNOWN</span>
+            </div>
+
+            <div class="data-grid">
+                <div class="data-item">
+                    <div class="data-label">Queue Manager</div>
+                    <div id="qm-value" class="data-value">-</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">Last Check Time</div>
+                    <div id="time-value" class="data-value">-</div>
+                </div>
+                <div class="data-item details-box">
+                    <div class="data-label">Status Details & Error Codes</div>
+                    <div id="details-value" class="data-value">No health check executed yet. Click "Check Status" to trigger.</div>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button id="check-btn">Check Status</button>
+            </div>
+
+            <div id="error-alert" class="error-message"></div>
+        </div>
+    </main>
+
+    <footer>
+        Made with IBM Bob
+    </footer>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const appNameEl = document.getElementById("app-name");
+        const appEnvEl = document.getElementById("app-env");
+        const statusBadge = document.getElementById("status-badge");
+        const qmValue = document.getElementById("qm-value");
+        const timeValue = document.getElementById("time-value");
+        const detailsValue = document.getElementById("details-value");
+        const checkBtn = document.getElementById("check-btn");
+        const errorAlert = document.getElementById("error-alert");
+
+        // Fetch application identity info
+        async function fetchAppInfo() {
+            try {
+                const response = await fetch("/api/info");
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.name) appNameEl.textContent = data.name;
+                    if (data.env) appEnvEl.textContent = data.env;
+                }
+            } catch (err) {
+                console.warn("Could not fetch application metadata", err);
+                appEnvEl.textContent = "Offline";
+            }
+        }
+
+        // Trigger health check fetch
+        async function runHealthCheck() {
+            // Reset states
+            checkBtn.disabled = true;
+            checkBtn.textContent = "Checking...";
+            errorAlert.style.display = "none";
+
+            try {
+                const response = await fetch("/health/mq");
+                const data = await response.json();
+
+                updateUI(data, response.ok);
+            } catch (err) {
+                console.error("Health check fetch failed:", err);
+                showFetchError(err.message || "Network request failed. Ensure server is running.");
+            } finally {
+                checkBtn.disabled = false;
+                checkBtn.textContent = "Check Status";
+            }
+        }
+
+        function updateUI(data, isOk) {
+            const status = data.status ? data.status.toUpperCase() : "UNKNOWN";
+            
+            // Set status classes
+            statusBadge.className = "badge";
+            if (status === "UP") {
+                statusBadge.classList.add("badge-up");
+            } else if (status === "DEGRADED") {
+                statusBadge.classList.add("badge-degraded");
+            } else {
+                statusBadge.classList.add("badge-down");
+            }
+            statusBadge.textContent = status;
+
+            qmValue.textContent = data.queueManager || "Unknown QM";
+            
+            if (data.timestamp) {
+                try {
+                    const date = new Date(data.timestamp);
+                    timeValue.textContent = date.toLocaleString();
+                } catch {
+                    timeValue.textContent = data.timestamp;
+                }
+            } else {
+                timeValue.textContent = "-";
+            }
+
+            detailsValue.textContent = data.details || "No details provided.";
+        }
+
+        function showFetchError(message) {
+            statusBadge.className = "badge badge-down";
+            statusBadge.textContent = "DOWN";
+            qmValue.textContent = "-";
+            timeValue.textContent = new Date().toLocaleString();
+            detailsValue.textContent = "Failed to communicate with REST health API endpoint.";
+            
+            errorAlert.textContent = "HTTP Connection Error: " + message;
+            errorAlert.style.display = "block";
+        }
+
+        // Event listeners
+        checkBtn.addEventListener("click", runHealthCheck);
+
+        // Initial setup
+        fetchAppInfo();
+        runHealthCheck(); // Check automatically on load
+    });
+</script>
+</body>
+</html>

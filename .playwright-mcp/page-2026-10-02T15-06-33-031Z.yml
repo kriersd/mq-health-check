@@ -1,0 +1,23 @@
+- generic [ref=f1e2]:
+  - banner [ref=f1e3]:
+    - heading "IBM MQ High-Availability Monitor" [level=1] [ref=f1e5]
+    - generic [ref=f1e6]: Production
+  - main [ref=f1e7]:
+    - generic [ref=f1e8]:
+      - generic [ref=f1e9]:
+        - generic [ref=f1e10]: Load Balancer Visibility State
+        - generic [ref=f1e11]: UNKNOWN
+      - generic [ref=f1e12]:
+        - generic [ref=f1e13]:
+          - generic [ref=f1e14]:
+            - text: "Queue Manager:"
+            - strong [ref=f1e15]: "-"
+          - generic [ref=f1e16]:
+            - text: "Last Sync:"
+            - strong [ref=f1e17]: "-"
+        - generic [ref=f1e18]: Checking subsystem metrics...
+      - heading "Subsystem Health Breakdown (12 Coverage Rows)" [level=2] [ref=f1e19]
+      - generic [ref=f1e20]:
+        - generic [ref=f1e21]: "F5 Pool logic is safe: Pool failure = 200 DEGRADED, Member failure = 503 DOWN"
+        - button "Querying Subsystems..." [disabled] [ref=f1e22]
+  - contentinfo [ref=f1e23]: Exposing Enterprise IBM MQ High-Availability Orchestration

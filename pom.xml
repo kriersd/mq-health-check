@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
     Filename: pom.xml
-    Purpose: Maven build descriptor for the IBM MQ Health Check API application.
+    Purpose: Maven build descriptor for the expanded, production-grade IBM MQ Health Check API application.
     Sensitive-Data Handling: None. No credentials or endpoints are defined in this build file.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -27,6 +27,8 @@
         <jackson.version>2.15.2</jackson.version>
         <slf4j.version>2.0.7</slf4j.version>
         <mqclient.version>9.3.4.0</mqclient.version>
+        <junit.version>5.9.3</junit.version>
+        <mockito.version>5.3.1</mockito.version>
     </properties>
 
     <dependencies>
@@ -57,6 +59,32 @@
             <artifactId>com.ibm.mq.allclient</artifactId>
             <version>${mqclient.version}</version>
         </dependency>
+
+        <!-- Testing Dependencies -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -70,6 +98,13 @@
                     <source>${maven.compiler.source}</source>
                     <target>${maven.compiler.target}</target>
                 </configuration>
+            </plugin>
+
+            <!-- Maven Surefire Plugin for running tests -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
             </plugin>
 
             <!-- Maven Shade Plugin to bundle dependencies into a single fat JAR -->
@@ -91,7 +126,7 @@
                                 <!-- Merge service providers to avoid breaking SLF4J/Javalin standard services in shaded JAR -->
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
-                            <!-- Minimize jar by removing unused classes, keeping standard filters to prevent class loader issues -->
+                            <!-- Minimize jar by removing unused classes -->
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact>

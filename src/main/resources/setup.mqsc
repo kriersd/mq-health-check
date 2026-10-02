@@ -1,0 +1,39 @@
+* ==============================================================================
+* Filename: src/main/resources/setup.mqsc
+* Purpose: Idempotent MQSC definitions for health-check queues, channels, and security.
+* Sensitive-Data Handling: None. No credentials or active client IPs are hardcoded.
+* ==============================================================================
+
+* 1. Define Health Check Test Queue
+* Set MAXDEPTH appropriately and descriptive text.
+DEFINE QLOCAL('DEV.QUEUE.1') +
+       DESCR('Core Health Check and Keepalive probe queue') +
+       MAXDEPTH(5000) +
+       MAXMSGL(4194304) +
+       REPLACE
+
+* 2. Define Server Connection Channel with Heartbeat Interval (60 seconds)
+* HBINT(60) ensures broken client sockets are cleaned up within 60s of inactivity.
+DEFINE CHANNEL('APP.SVRCONN') CHLTYPE(SVRCONN) +
+       DESCR('Secure Channel for Application Client Health Probes') +
+       HBINT(60) +
+       SSLCAUTH(REQUIRED) +
+       SSLCIPH('TLS_RSA_WITH_AES_128_CBC_SHA256') +
+       REPLACE
+
+* 3. CHLAUTH Mapping Rules (Security Hardening)
+* Block all users on APP.SVRCONN by default, then selectively allow health monitor user.
+SET CHLAUTH('APP.SVRCONN') TYPE(ADDRESSMAP) ADDRESS('*') USERSRC(MAP) MCAUSER('nobody') WARN(NO) ACTION(REPLACE)
+
+* Map the health check monitor service's specific host IP (e.g., 10.120.45.10) to the designated non-privileged MCA User
+SET CHLAUTH('APP.SVRCONN') TYPE(ADDRESSMAP) ADDRESS('10.120.45.10') USERSRC(MAP) MCAUSER('mq_app_user') ACTION(REPLACE)
+
+* 4. Connection Authentication (CONNAUTH) Setup
+* Ensure user ID authentication is active and matching credentials.
+ALTER QMGR CONNAUTH('SYSTEM.DEFAULT.AUTHINFO.IDPWOS')
+REFRESH QMGR TYPE(CONFIG)
+
+* 5. Designated setmqaut commands (To be run by mqm administrator on CLI):
+* setmqaut -m QM1 -t qmgr -p mq_app_user +connect +inq
+* setmqaut -m QM1 -n DEV.QUEUE.1 -t queue -p mq_app_user +inq +browse +put +get
+* setmqaut -m QM1 -n SYSTEM.DEAD.LETTER.QUEUE -t queue -p mq_app_user +inq

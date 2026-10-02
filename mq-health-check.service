@@ -1,0 +1,41 @@
+# ==============================================================================
+# Filename: mq-health-check.service
+# Purpose: Systemd service unit descriptor for auto-managing the MQ Health Agent.
+# Location: /etc/systemd/system/mq-health-check.service
+# ==============================================================================
+
+[Unit]
+Description=IBM MQ High-Availability REST Health Check Agent and Dashboard
+After=network.target syslog.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mqm
+Group=mqm
+
+# Path to directory containing the built fat JAR and environmental config
+WorkingDirectory=/opt/mqmonitor
+
+# Load actual environment variable credentials securely from local disk (.env)
+EnvironmentFile=/opt/mqmonitor/.env
+
+# Execute the Javalin fat JAR compiled targeting Red Hat OpenJDK 17
+ExecStart=/usr/bin/java -Xms128m -Xmx256m -jar /opt/mqmonitor/mq-health-check-1.0.0.jar
+
+# Auto-Restart rules: Systemd restarts agent within 5 seconds if it exits/crashes
+Restart=always
+RestartSec=5s
+
+# Standard redirect logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mq-health-check
+
+# Security hardening limits
+PrivateTmp=true
+ProtectSystem=full
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

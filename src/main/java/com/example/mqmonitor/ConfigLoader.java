@@ -1,5 +1,8 @@
 package com.example.mqmonitor;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
 import java.io.InputStream;
 import java.util.Properties;
 import org.slf4j.Logger;
@@ -20,6 +23,15 @@ public class ConfigLoader {
         loadProperties();
     }
 
+    /**
+     * Overloaded constructor for testing allowing direct properties injection.
+     */
+    public ConfigLoader(Properties properties) {
+        if (properties != null) {
+            this.properties.putAll(properties);
+        }
+    }
+
     private void loadProperties() {
         try (InputStream input = getClass().getClassLoader().getResourceAsStream("config.properties")) {
             if (input == null) {
@@ -31,15 +43,48 @@ public class ConfigLoader {
         } catch (Exception ex) {
             logger.error("Failed to load config.properties file: {}", ex.getMessage(), ex);
         }
+
+        // Dynamically load .env file from the current directory if it exists to simplify local execution
+        File envFile = new File(".env");
+        if (envFile.exists() && envFile.isFile()) {
+            try (BufferedReader br = new BufferedReader(new FileReader(envFile))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    line = line.trim();
+                    if (line.isEmpty() || line.startsWith("#")) {
+                        continue;
+                    }
+                    int eqIdx = line.indexOf('=');
+                    if (eqIdx > 0) {
+                        String key = line.substring(0, eqIdx).trim();
+                        String val = line.substring(eqIdx + 1).trim();
+                        // Strip trailing comments (like '# SENSITIVE')
+                        int hashIdx = val.indexOf('#');
+                        if (hashIdx >= 0) {
+                            val = val.substring(0, hashIdx).trim();
+                        }
+                        properties.setProperty(key, val);
+                    }
+                }
+                logger.info("Successfully loaded configuration overrides from local .env file.");
+            } catch (Exception ex) {
+                logger.error("Failed to load local .env file: {}", ex.getMessage());
+            }
+        }
     }
 
     /**
      * Retrieves a config value, checking environment variables first as overrides.
      */
-    private String getString(String propKey, String envKey) {
+    public String getString(String propKey, String envKey) {
         String envValue = System.getenv(envKey);
         if (envValue != null && !envValue.trim().isEmpty()) {
             return envValue;
+        }
+        // Fall back to .env loaded properties
+        String envFileValue = properties.getProperty(envKey);
+        if (envFileValue != null && !envFileValue.trim().isEmpty()) {
+            return envFileValue;
         }
         return properties.getProperty(propKey);
     }
@@ -47,7 +92,7 @@ public class ConfigLoader {
     /**
      * Retrieves a config integer, checking environment overrides first.
      */
-    private int getInt(String propKey, String envKey, int defaultValue) {
+    public int getInt(String propKey, String envKey, int defaultValue) {
         String val = getString(propKey, envKey);
         if (val == null || val.trim().isEmpty()) {
             return defaultValue;
@@ -60,12 +105,27 @@ public class ConfigLoader {
         }
     }
 
+    /**
+     * Retrieves a config boolean, checking environment overrides first.
+     */
+    public boolean getBoolean(String propKey, String envKey, boolean defaultValue) {
+        String val = getString(propKey, envKey);
+        if (val == null || val.trim().isEmpty()) {
+            return defaultValue;
+        }
+        return Boolean.parseBoolean(val.trim());
+    }
+
     public String getAppName() {
         return getString("app.name", "APP_NAME");
     }
 
     public String getAppEnv() {
         return getString("app.env", "APP_ENV");
+    }
+
+    public int getAppPort() {
+        return getInt("app.port", "PORT", 8080);
     }
 
     public String getMqHost() {
@@ -88,6 +148,26 @@ public class ConfigLoader {
         return getString("mq.testQueue", "MQ_TEST_QUEUE");
     }
 
+    public String getMqDlqName() {
+        return getString("mq.dlqName", "MQ_DLQ_NAME");
+    }
+
+    public String getMqIniPath() {
+        return getString("mq.iniPath", "MQ_INI_PATH");
+    }
+
+    public String getMqDataPath() {
+        return getString("mq.dataPath", "MQ_DATA_PATH");
+    }
+
+    public String getMqKeystorePath() {
+        return getString("mq.keystorePath", "MQ_KEYSTORE_PATH");
+    }
+
+    public String getMqKeystorePassword() {
+        return getString("mq.keystorePassword", "MQ_KEYSTORE_PASSWORD");
+    }
+
     public String getMqUsername() {
         return getString("mq.username", "MQ_USERNAME");
     }
@@ -100,11 +180,28 @@ public class ConfigLoader {
         return getString("mq.sslCipherSuite", "MQ_SSL_CIPHER_SUITE");
     }
 
-    public String getMqKeystorePath() {
-        return getString("mq.keystorePath", "MQ_KEYSTORE_PATH");
+    // Dynamic getters for checks
+    public boolean isCheckEnabled(String checkKey) {
+        return getBoolean("check." + checkKey + ".enabled", "CHECK_" + checkKey.toUpperCase() + "_ENABLED", true);
     }
 
-    public String getMqKeystorePassword() {
-        return getString("mq.keystorePassword", "MQ_KEYSTORE_PASSWORD");
+    public String getCheckSeverity(String checkKey) {
+        return getString("check." + checkKey + ".severity", "CHECK_" + checkKey.toUpperCase() + "_SEVERITY");
+    }
+
+    public int getCheckThreshold(String checkKey, int defaultValue) {
+        return getInt("check." + checkKey + ".threshold", "CHECK_" + checkKey.toUpperCase() + "_THRESHOLD", defaultValue);
+    }
+
+    public String getCheckChannels(String checkKey) {
+        return getString("check." + checkKey + ".channels", "CHECK_" + checkKey.toUpperCase() + "_CHANNELS");
+    }
+
+    public String getCheckQueues(String checkKey) {
+        return getString("check." + checkKey + ".queues", "CHECK_" + checkKey.toUpperCase() + "_QUEUES");
+    }
+
+    public int getCheckCpuLimit() {
+        return getInt("check.host_resources.cpu_limit", "CHECK_HOST_RESOURCES_CPU_LIMIT", 95);
     }
 }

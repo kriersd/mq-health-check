@@ -15,28 +15,43 @@ public class App {
     private static final Logger logger = LoggerFactory.getLogger(App.class);
 
     public static void main(String[] args) {
-        logger.info("Starting MQ Monitor Application...");
+        logger.info("Starting HA MQ Monitor Application...");
 
         // Load configuration
         ConfigLoader configLoader = new ConfigLoader();
 
-        // Instantiate health check logic
-        MqHealthCheck healthCheck = new MqHealthCheck(configLoader);
+        // Log resolved configuration to aid diagnostics on different servers
+        logger.info("========================================");
+        logger.info("Resolved IBM MQ Connection Configuration:");
+        logger.info("  MQ Host:          {}", configLoader.getMqHost());
+        logger.info("  MQ Port:          {}", configLoader.getMqPort());
+        logger.info("  MQ Channel:       {}", configLoader.getMqChannel());
+        logger.info("  MQ Queue Manager: {}", configLoader.getMqQueueManager());
+        logger.info("  MQ Test Queue:    {}", configLoader.getMqTestQueue());
+        logger.info("  MQ DLQ Name:      {}", configLoader.getMqDlqName());
+        logger.info("  MQ Username:      {}", configLoader.getMqUsername());
+        logger.info("========================================");
 
-        // Fetch application port from environmental override, default to 8080
-        int serverPort = 8080;
-        String envPort = System.getenv("PORT");
-        if (envPort != null && !envPort.trim().isEmpty()) {
-            try {
-                serverPort = Integer.parseInt(envPort.trim());
-                logger.info("Server port overridden by env PORT to: {}", serverPort);
-            } catch (NumberFormatException nfe) {
-                logger.warn("Invalid env PORT value: '{}'. Defaulting to 8080.", envPort);
+        // Programmatically configure JSSE standard SSL/TLS system properties if keystore is defined
+        String keystorePath = configLoader.getMqKeystorePath();
+        String keystorePassword = configLoader.getMqKeystorePassword();
+        if (keystorePath != null && !keystorePath.trim().isEmpty() && !"CHANGE_ME".equals(keystorePath)) {
+            System.setProperty("javax.net.ssl.keyStore", keystorePath.trim());
+            System.setProperty("javax.net.ssl.trustStore", keystorePath.trim());
+            logger.info("Configured JSSE System Property: javax.net.ssl.keyStore/trustStore = {}", keystorePath);
+            if (keystorePassword != null && !keystorePassword.trim().isEmpty() && !"CHANGE_ME".equals(keystorePassword)) {
+                System.setProperty("javax.net.ssl.keyStorePassword", keystorePassword);
+                System.setProperty("javax.net.ssl.trustStorePassword", keystorePassword);
             }
         }
 
+        // Instantiate health check logic
+        MqHealthCheck healthCheck = new MqHealthCheck(configLoader);
+
+        // Fetch application port from ConfigLoader (defaults to 8080 or PORT env)
+        int serverPort = configLoader.getAppPort();
+
         // Initialize embedded Javalin web server
-        int finalServerPort = serverPort;
         Javalin app = Javalin.create(config -> {
             // Configure classpath static files directory '/public' corresponding to src/main/resources/public
             config.staticFiles.add("/public");
@@ -53,28 +68,33 @@ public class App {
             ctx.json(new AppInfo(configLoader.getAppName(), configLoader.getAppEnv()));
         });
 
-        // Register GET /health/mq Endpoint
+        // Register GET /health/mq Endpoint with F5-safe status code mapping
         app.get("/health/mq", ctx -> handleMqHealthCheck(ctx, healthCheck));
 
         // Start the server
-        logger.info("Starting web server on port {}...", finalServerPort);
-        app.start(finalServerPort);
-        logger.info("Server successfully started and listening at http://localhost:{}", finalServerPort);
+        logger.info("Starting web server on port {}...", serverPort);
+        app.start(serverPort);
+        logger.info("Server successfully started and listening at http://localhost:{}", serverPort);
     }
 
     /**
      * Handler for the GET /health/mq endpoint. Executes health verification 
-     * and maps results into the requested JSON formats and correct HTTP Status codes.
+     * and maps results into the requested JSON formats and F5 load-balancing safe HTTP status codes:
+     * - UP (200 OK)
+     * - DEGRADED (200 OK) -> Keeps member in F5 pool, alerts only. Prevents total pool outage.
+     * - DOWN (503 Service Unavailable) -> F5 immediately drops this unhealthy member.
      */
     private static void handleMqHealthCheck(Context ctx, MqHealthCheck healthCheck) {
-        MqHealthCheck.HealthStatus result = healthCheck.performCheck();
+        MqHealthCheck.HealthSummary result = healthCheck.performCheck();
         
         ctx.contentType("application/json");
 
-        if ("UP".equalsIgnoreCase(result.getStatus())) {
-            ctx.status(200); // OK
+        if ("UP".equalsIgnoreCase(result.status)) {
+            ctx.status(200); // 200 OK
+        } else if ("DEGRADED".equalsIgnoreCase(result.status)) {
+            ctx.status(200); // 200 OK (Alert but keep member in the F5 load-balancer pool)
         } else {
-            ctx.status(503); // Service Unavailable for DOWN/DEGRADED
+            ctx.status(503); // 503 Service Unavailable (Remove this unhealthy member from F5 pool)
         }
         
         ctx.json(result);

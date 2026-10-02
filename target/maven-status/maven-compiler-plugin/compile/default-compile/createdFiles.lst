@@ -1,5 +1,6 @@
 com/example/mqmonitor/App$AppInfo.class
 com/example/mqmonitor/MqHealthCheck.class
-com/example/mqmonitor/MqHealthCheck$HealthStatus.class
+com/example/mqmonitor/MqHealthCheck$HealthSummary.class
+com/example/mqmonitor/MqHealthCheck$CheckResult.class
 com/example/mqmonitor/App.class
 com/example/mqmonitor/ConfigLoader.class
